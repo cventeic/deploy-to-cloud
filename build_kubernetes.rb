@@ -1,3 +1,4 @@
+require 'erb'
 
 def kubernetes_establish_deployment(component, image)
 
@@ -35,7 +36,9 @@ spec:
         # This setting makes nodes pull the docker image every time before
         # starting the pod. This is useful when debugging, but should be turned
         # off in production.
-        imagePullPolicy: Always
+        # imagePullPolicy: Always
+
+        imagePullPolicy: IfNotPresent 
 
         # The FORMATION environment variable is used by foreman in the
         # Dockerfile's CMD to control which processes are started. In this
@@ -44,17 +47,20 @@ spec:
         - name: FORMATION
           value: web=1
 
-<%= if component.tier == "frontend" -%>
-        # The bookshelf process listens on port 8080 for web traffic by default.
-        ports:
-        - name: http-server
-          containerPort: 8080
-<% end -%>
     }
 
-  file_name = "deployment_#{component_name}.yaml"
+# <%= if component.tier == "frontend" -%>
+#        # The bookshelf process listens on port 8080 for web traffic by default.
+#        ports:
+#        - name: http-server
+#          containerPort: 8080
+#<% end -%>
 
-  make_file(file_name, ERB.new(deployment).result())
+  file_name = "deployment-#{component_name}.yaml"
+
+  file_txt  = ERB.new(deployment).result()
+
+  make_file(file_name, file_txt)
 
   exec("kubectl create -f #{file_name}")
 
@@ -101,7 +107,7 @@ spec:
     targetPort: http-server
     }
 
-  file_name = "service_{service_name}.yaml"
+  file_name = "service-#{service_name}.yaml"
 
   make_file(file_name, ERB.new(service_yml).result())
 

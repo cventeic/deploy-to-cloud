@@ -1,5 +1,6 @@
 
-def docker_create_container_image(tag)
+def docker_create_container_image(container_name)
+  puts "#{__method__.to_s} enter"
 
   dockerfile_google_container_engine = <<-YML
 
@@ -10,16 +11,18 @@ def docker_create_container_image(tag)
 FROM gcr.io/google_appengine/ruby
 
 # Install 2.2.3 if not already preinstalled by the base image
+#    gem install -q --no-rdoc --no-ri bundler --version 1.11.2
 RUN cd /rbenv/plugins/ruby-build && \
     git pull && \
-    rbenv install -s 2.2.3 && \
-    rbenv global 2.2.3 && \
-    gem install -q --no-rdoc --no-ri bundler --version 1.11.2
-ENV RBENV_VERSION 2.2.3
+    rbenv install -s 2.2.5 && \
+    rbenv global 2.2.5 && \
+    gem install -q --no-rdoc --no-ri bundler \
+    gem install -q --no-rdoc --no-ri foreman
+ENV RBENV_VERSION 2.2.5
 
 # Copy the application files.
-#COPY . /app/
-COPY test_app /app/
+COPY . /app/
+
 
 # Install required gems.
 RUN bundle install --deployment && rbenv rehash
@@ -41,17 +44,30 @@ CMD bundle exec foreman start --formation "$FORMATION"
 
   YML
 
-  make_file("Dockerfile", dockerfile) 
+  make_file("test-app/Dockerfile", dockerfile_google_container_engine )
 
-  #exec 'docker-compose run web rails new . --force --database=postgresql'
-  exec 'docker-compose run web rails new . --force '
+  #exec 'docker run web rails new . --force --database=postgresql'
+  #exec 'docker run web rails new . --force '
 
 
   # Not target here is gcr
   #
-  #exec "docker build -t gcr.io/#{project.id}/#{project.name}:#{project.tag}"
-  exec "docker build -t #{tag}"
+  #exec "docker build --verbose -t gcr.io/#{project.id}/#{project.name}:#{project.container_name}"
+  puts "container_name #{container_name}"
+  exec "docker build -t #{container_name} test-app"
 
+  # https://docs.docker.com/registry/#requirements
+
+  #external_registry_endpoint = "localhost:5000/"
+	#exec "docker tag #{container_name} #{container_name} #{external_registry_endpoint}#{container_name}:#{container_name}"
+
+	#exec "docker tag #{container_name} #{container_name} #{external_registry_endpoint}#{container_name}:latest"
+
+	#exec "docker tag #{container_name} #{external_registry_endpoint}#{container_name}/#{container_name}"
+	#exec "docker tag #{container_name} #{external_registry_endpoint}#{container_name}/#{container_name}:latest"
+
+
+  puts "#{__method__.to_s} exit"
 end
 
 

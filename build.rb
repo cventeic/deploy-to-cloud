@@ -1,14 +1,16 @@
 require './build_gce'
 require './build_util'
+require './build_docker'
+require './build_kubernetes'
+require 'ostruct'
 
-project = {
-  id: 0,
-  name: 'test_app',
-  tag: '',
-  gcs_bucket_name: '',
-  access_key: '',
-  secret: ''
-}
+project = OpenStruct.new
+project.id   = 0
+project.name = 'test-app'
+project.tag  = 'test-app'
+# project.gcs_bucket_name = ''
+# project.access_key = ''
+# project.secret = ''
 
 # 1. Create Container Engine Cluster
 #gce_create_cluster(project)
@@ -25,32 +27,57 @@ project = {
 #rails_configure_settings(project)
 
 #   c. Containerizing the application
-image_tag =  "gcr.io/#{project.id}/#{project.name}:#{project.tag}"
-image_url =  "gcr.io/#{project.id}/#{project.name}:latest"
+#image_tag =  "gcr.io/#{project.id}/#{project.name}:#{project.tag}"
+#image_url =  "gcr.io/#{project.id}/#{project.name}:latest"
 
-exec 'rails new test_app --force'
+#registry  =  "gcr.io/#{project.id}/#{project.name}:#{project.tag}"
 
-docker_create_container_image(image_tag)
+# docker run -d -p 5000:5000 --name registry registry:2
+
+
+#image_tag =  "#{registry}:#{project.tag}"
+#image_tag =  "#{registry}:latest"
+#image_url =  "gcr.io/#{project.id}/#{project.name}:latest"
+
+#
+exec 'rails new test-app --force'
+
+#external_registry_endpoint  = "localhost:5000/"
+#image_url = "#{external_registry_endpoint}#{project.name}"
+
+image_url = "test-app"
+
+docker_create_container_image(image_url)
+
 #gce_push_container_image(image_tag)
+
+# Start local docker registry
+# docker run -d -p 5000:5000 --name registry registry:2
+
+#external_registry_endpoint = "localhost:5000/"
+#exec "docker push #{external_registry_endpoint}#{project.name}"
 
 
 # Deploy the replicated front end for the application.
 #
-component.app = "bookshelf"
+component = OpenStruct.new
+component.app = "test-app"
 component.tier  = "frontend"
 component.replicas = 3
+
 kubernetes_establish_deployment(component, image_url)
 
 # Deploy the replicated back end for the application.
 #
-component.app = "bookshelf"
+component.app = "test-app"
 component.tier  = "worker"
 component.replicas = 2 
-kubernetes_estabish_deployment(component, image_url)
+kubernetes_establish_deployment(component, image_url)
 
-# Deploy the load-balanced service to route HTTP traffic to the Bookshelf front end.
+# Deploy the load-balanced service to route HTTP traffic to the front end.
 #
-service.app = "bookshelf"
+service = OpenStruct.new
+service.app = "test-app"
 service.tier  = "frontend"
 kubernetes_establish_service(service)
 
