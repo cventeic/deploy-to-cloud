@@ -115,8 +115,8 @@ def docker_create_container_image(container_name, docker_context_url)
       # Configure the main working directory. This is the base
       # directory used in any further RUN, COPY, and ENTRYPOINT
       # commands.
-      RUN mkdir -p /myapp
-      WORKDIR /myapp
+      RUN mkdir -p /home/app/web-app
+      WORKDIR /home/app/web-app
     },
     #%{
     #  RUN mkdir -p /home/app/cvwebapp
@@ -130,9 +130,9 @@ def docker_create_container_image(container_name, docker_context_url)
       COPY test-app-git/Gemfile test-app-git/Gemfile.lock ./
       RUN gem install bundler && bundle install --jobs 20 --retry 5
     },
-    " ADD test-app-git  /myapp",
-    # "ADD test-app-git  /home/app/cvwebapp",
-    # "RUN chown -R app:app /home/app/cvwebapp",
+      # "ADD test-app-git  /home/app/cvwebapp",
+      "ADD test-app-git  /home/app/web-app",
+      #"RUN chown -R app:app /home/app/web-app",
     %{
       # Expose port 3000 to the Docker host, so we can access it 
       # from the outside.
