@@ -27,7 +27,7 @@ services:
       - db
 FOO
 
-make_file("docker-compose.yml", docker_compose) 
+make_file("docker-compose.yml", docker_compose)
 
 
 exec 'touch Gemfile.lock'

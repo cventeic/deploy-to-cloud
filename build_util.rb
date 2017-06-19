@@ -13,11 +13,10 @@ def exec(command)
   #  puts "#{status} #{stdout.chomp} #{stderr.chomp}"
   #end
 
-  Open3.popen3(command) do |input, stdout, stderr, wait_thr|
-    out = stdout.read.chomp
-    err = stderr.read.chomp
-    puts "out: #{out}" unless out == ""
-    puts "err: #{err}" unless err == ""
+  Open3.popen2e(command) do |input, stdout_stderr, wait_thr|
+    stdout_stderr.each {|line|
+      puts line
+    }
   end
 
   puts

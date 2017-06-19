@@ -40,14 +40,18 @@ project.tag  = 'test-app'
 #image_url =  "gcr.io/#{project.id}/#{project.name}:latest"
 
 #
-exec 'rails new test-app --force'
+#exec 'rails new test-app-git --force'
 
 #external_registry_endpoint  = "localhost:5000/"
 #image_url = "#{external_registry_endpoint}#{project.name}"
 
 image_url = "test-app"
+docker_context_url = "docker_context"
 
-docker_create_container_image(image_url)
+#container_name = "gcr.io/#{project.id}/#{project.name}:#{project.container_name}"
+container_name = "test-app"
+
+docker_create_container_image(container_name, docker_context_url)
 
 #gce_push_container_image(image_tag)
 
@@ -57,6 +61,16 @@ docker_create_container_image(image_url)
 #external_registry_endpoint = "localhost:5000/"
 #exec "docker push #{external_registry_endpoint}#{project.name}"
 
+kubernetes_delete_old()
+
+# Deploy the replicated back end for the application.
+#
+#component = OpenStruct.new
+#component.app = "test-app"
+#component.tier  = "worker"
+#component.replicas = 2
+#kubernetes_establish_deployment(component, image_url)
+
 
 # Deploy the replicated front end for the application.
 #
@@ -65,23 +79,18 @@ component.app = "test-app"
 component.tier  = "frontend"
 component.replicas = 3
 
-kubernetes_establish_deployment(component, image_url)
-
-# Deploy the replicated back end for the application.
-#
-component.app = "test-app"
-component.tier  = "worker"
-component.replicas = 2 
-kubernetes_establish_deployment(component, image_url)
+kubernetes_config_url = "kubernetes_config"
+kubernetes_establish_deployment(component, image_url, kubernetes_config_url)
 
 # Deploy the load-balanced service to route HTTP traffic to the front end.
 #
 service = OpenStruct.new
 service.app = "test-app"
 service.tier  = "frontend"
-kubernetes_establish_service(service)
+kubernetes_establish_service(service, component, kubernetes_config_url)
 
-
+# To see app on minikube do this
+# minikube service test-app-load-balancer
 
 
 

@@ -1,6 +1,4 @@
 
-def stuff()
-# Postgres
 =begin
 config_database_yml = <<-YML
 development: &default
@@ -52,7 +50,7 @@ test:
   host: db
 FOO
 
-make_file("config/database.yml", config_database_yml) 
+  make_file("config/database.yml", config_database_yml) 
 =end
 
 
@@ -120,4 +118,7 @@ production:
 
   make_file("config/settings.yml", config_settings_yml) 
 end
+
+
+# exec 'rails new . --force --database=postgresql'
 
