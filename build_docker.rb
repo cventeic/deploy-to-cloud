@@ -1,5 +1,6 @@
+require './build_passenger'
 
-def docker_ignore()
+def _docker_ignore()
   dockerignore = <<-FOO
 .git*
 db/*.sqlite3
@@ -34,7 +35,12 @@ def docker_create_container_image(container_name, docker_context_url)
 
   puts "container_name #{container_name}"
 
+
+  passenger = true
+
+
   exec("mkdir -p #{docker_context_url}")
+
 
   base_image = {}
 
@@ -64,8 +70,8 @@ def docker_create_container_image(container_name, docker_context_url)
 
 
   #########################################
-
-  nginx = %{
+  if(passenger)
+    nginx = %{
     # **** NGINX *****
 
     # Enable NGINX
@@ -77,7 +83,7 @@ def docker_create_container_image(container_name, docker_context_url)
     #
 
     RUN rm /etc/nginx/sites-enabled/default
-    ADD webapp.conf /etc/nginx/sites-enabled/webapp.conf
+    ADD web-app.conf /etc/nginx/sites-enabled/web-app.conf
 
     # Configure NGINX
     #
@@ -85,16 +91,18 @@ def docker_create_container_image(container_name, docker_context_url)
     # Files in conf.d are included in the Nginx configuration's http context.
     #
 
-    ADD secret_key.conf  /etc/nginx/main.d/secret_key.conf
-    ADD gzip_max.conf    /etc/nginx/conf.d/gzip_max.conf
-    ADD 00_app_env.conf /etc/nginx/conf.d/00_app_env.conf
+    # ADD secret_key.conf /etc/nginx/main.d/secret_key.conf
+    # ADD gzip_max.conf   /etc/nginx/conf.d/gzip_max.conf
+    # ADD rails-env.conf  /etc/nginx/main.d/rails-env.conf
+      ADD 00_app_env.conf /etc/nginx/conf.d/00_app_env.conf
+    }
 
-    # ADD rails-env.conf /etc/nginx/main.d/rails-env.conf
-  }
+    # Create the required files
+    passenger_prep(docker_context_url)
 
-  #########################################
+    #########################################
 
-  passenger_redis = %{
+    passenger_redis = %{
     # Using Redis
     # Opt-in for Redis if you're using the 'customizable' image.
     RUN /pd_build/redis.sh
@@ -102,15 +110,23 @@ def docker_create_container_image(container_name, docker_context_url)
     # Enable the Redis service.
     RUN rm -f /etc/service/redis/down
     }
+  end
 
   #########################################
 
   dockerfile = [
-    base_image[:ruby],
+    base_image[:ruby]
+  ]
 
-    # nginx,
+  dockerfile_passenger = [
+    base_image[:passenger],
+    nginx
     # passenger_redis,
+  ]
 
+  dockerfile = dockerfile_passenger if(passenger)
+
+  dockerfile += [
    %{
       # Configure the main working directory. This is the base
       # directory used in any further RUN, COPY, and ENTRYPOINT
@@ -118,10 +134,6 @@ def docker_create_container_image(container_name, docker_context_url)
       RUN mkdir -p /home/app/web-app
       WORKDIR /home/app/web-app
     },
-    #%{
-    #  RUN mkdir -p /home/app/cvwebapp
-    #  WORKDIR /home/app/cvwebapp
-    #},
     %{
       # Copy the Gemfile as well as the Gemfile.lock and install 
       # the RubyGems. This is a separate step so the dependencies 
@@ -130,9 +142,12 @@ def docker_create_container_image(container_name, docker_context_url)
       COPY test-app-git/Gemfile test-app-git/Gemfile.lock ./
       RUN gem install bundler && bundle install --jobs 20 --retry 5
     },
-      # "ADD test-app-git  /home/app/cvwebapp",
       "ADD test-app-git  /home/app/web-app",
-      #"RUN chown -R app:app /home/app/web-app",
+  ]
+
+  dockerfile += ["RUN chown -R app:app /home/app/web-app"] if(passenger)
+
+  dockerfile_non_passenger = [
     %{
       # Expose port 3000 to the Docker host, so we can access it 
       # from the outside.
@@ -149,7 +164,9 @@ def docker_create_container_image(container_name, docker_context_url)
       # default.
       CMD ["rails", "server", "-b", "0.0.0.0"]
     }
-  ].join("\n")
+  ]
+
+  dockerfie = dockerfile.join("\n")
 
 
   make_file("#{docker_context_url}/Dockerfile", dockerfile)

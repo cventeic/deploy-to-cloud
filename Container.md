@@ -1,4 +1,12 @@
 
+https://www.linode.com/docs/web-servers/nginx/how-to-configure-nginx
+
+
+# Minicube
+- Starting minicube will auto start any services and deployments that were
+    prevously loaded (configuration persistence)
+
+
 # Start minikube
 minikube start
 

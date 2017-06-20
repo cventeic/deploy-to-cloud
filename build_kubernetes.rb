@@ -1,5 +1,13 @@
 require 'erb'
 
+def misc_abc
+  #exec("kubectl get deployments")
+  #exec("kubectl get pods")
+
+  # Delete deployment
+  # exec("kubectl delete deployments #{deployment.name}")
+end
+
 def kubernetes_delete_old()
   exec("kubectl delete service --all")
   exec("kubectl delete deployment --all")
@@ -31,7 +39,7 @@ def kubernetes_establish_deployment(component, image, kubernetes_config_url)
         metadata:
           labels:
             app: #{component.app}
-            tier: #{component.tier} 
+            tier: #{component.tier}
         spec:
           containers:
           - name: #{component_name}
@@ -43,7 +51,7 @@ def kubernetes_establish_deployment(component, image, kubernetes_config_url)
             # off in production.
             # imagePullPolicy: Always
 
-            imagePullPolicy: IfNotPresent 
+            imagePullPolicy: IfNotPresent
 
             # The FORMATION environment variable is used by foreman in the
             # Dockerfile's CMD to control which processes are started. In this
@@ -54,10 +62,13 @@ def kubernetes_establish_deployment(component, image, kubernetes_config_url)
 
             # The process listens on port 8080 for web traffic by default.
             # containerPort: 8080
+            # containerPort: 3000   # Rails
             ports:
-              - name: http-server
+              - name: rails-server
                 containerPort: 3000
-  }
+              - name: http-server
+                containerPort: 8080
+   }
 
   #<%= if (component.tier == "frontend") %>
   #<% end %>
@@ -71,13 +82,6 @@ def kubernetes_establish_deployment(component, image, kubernetes_config_url)
   make_file(file_name, file_txt)
 
   exec("kubectl create -f #{file_name}")
-
-  #exec("kubectl get deployments")
-  #exec("kubectl get pods")
-
-  # Delete deployment
-  # exec("kubectl delete deployments #{deployment.name}")
-
 end
 
 
