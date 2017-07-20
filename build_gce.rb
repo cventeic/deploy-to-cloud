@@ -65,7 +65,7 @@ end
 #####################################
 
 def gce_push_container_image(image_tag)
-  exec "gcloud docker -- push #{image_tag}"
+  exec "gcloud docker -- push #{image_tag}:latest"
 end
 
 #####################################
