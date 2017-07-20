@@ -1,17 +1,32 @@
 require './build_passenger'
 
-def _docker_ignore()
-  dockerignore = <<-FOO
-.git*
-db/*.sqlite3
-db/*.sqlite3-journal
-log/*
-tmp/*
-Dockerfile
-README.rdoc
-  FOO
+def docker_ignore(docker_registry_url)
+  dockerignore = %{
+    .git*
+    .env*
+    .dockerignore
+    .bundle
+    db/*.sqlite3
+    db/*.sqlite3-journal
+    log/*
+    tmp/*
+    Dockerfile
+    README.rdoc
+    venteicher-org/log/*
+    venteicher-org/tmp/*
+    venteicher-org/.git*
+    venteicher-org/.bundle
+    venteicher-org/yarn-error.log
+    venteicher-org/.byebug_history
+    venteicher-org/db/*.sqlite3
+    venteicher-org/db/*.sqlite3-journal
+   }
 
-  make_file(".dockerignore", dockerignore)
+  #  venteicher-org/public/packs/*
+  #  venteicher-org/node_modules/*
+  #  venteicher-org/config/secrets.yml.key
+
+  make_file("#{docker_registry_url}/.dockerignore", dockerignore)
 end
 
 def docker_tag_image_into_repository(image_url, docker_registry_url)
@@ -23,18 +38,24 @@ def docker_tag_image_into_repository(image_url, docker_registry_url)
   # docker tag SOURCE_IMAGE[:TAG] TARGET_IMAGE[:TAG]
   #
   # Tag a local image with name “httpd” into the “fedora” repository with “version1.0”:
-  #   docker tag httpd fedora/httpd:version1.0
+  #
+  #   do: docker tag httpd fedora/httpd:version1.0
+  #
   #
   #exec "docker tag #{image_url} #{docker_registry_url}/#{container_name}"
   #exec "docker tag #{image_url} #{docker_registry_url}/#{container_name}:latest"
 end
 
 
-def docker_create_container_image(container_name, docker_context_url)
+def docker_create_container_image(
+  image_uri,           # Image Name
+  docker_context_url   # Where the files are located to crate the image from 
+)
   puts "#{__method__.to_s} enter"
 
-  puts "container_name #{container_name}"
+  puts "image uri / name #{image_uri}"
 
+  docker_ignore(docker_context_url)
 
   passenger = true
 
@@ -70,6 +91,7 @@ def docker_create_container_image(container_name, docker_context_url)
 
 
   #########################################
+
   if(passenger)
     nginx = %{
     # **** NGINX *****
@@ -91,14 +113,11 @@ def docker_create_container_image(container_name, docker_context_url)
     # Files in conf.d are included in the Nginx configuration's http context.
     #
 
-    # ADD secret_key.conf /etc/nginx/main.d/secret_key.conf
     # ADD gzip_max.conf   /etc/nginx/conf.d/gzip_max.conf
-    # ADD rails-env.conf  /etc/nginx/main.d/rails-env.conf
-      ADD 00_app_env.conf /etc/nginx/conf.d/00_app_env.conf
+    # ADD secret_key.conf /etc/nginx/main.d/secret_key.conf
+    ADD rails-env.conf  /etc/nginx/main.d/rails-env.conf
+    ADD 00_app_env.conf /etc/nginx/conf.d/00_app_env.conf
     }
-
-    # Create the required files
-    passenger_prep(docker_context_url)
 
     #########################################
 
@@ -114,38 +133,54 @@ def docker_create_container_image(container_name, docker_context_url)
 
   #########################################
 
-  dockerfile = [
-    base_image[:ruby]
-  ]
+  dockerfile = []
 
-  dockerfile_passenger = [
-    base_image[:passenger],
-    nginx
-    # passenger_redis,
-  ]
-
-  dockerfile = dockerfile_passenger if(passenger)
+  #dockerfile += [ base_image[:ruby] ]
+  dockerfile  += [ base_image[:passenger] ] if(passenger)
 
   dockerfile += [
-   %{
+    %{
+      # Install Yarn
+      #
+      RUN curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add -
+      RUN echo "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list
+      RUN apt-get update && apt-get install yarn
+    },
+      %{
+      # Install Nodejs version 7
+      RUN curl -sL https://deb.nodesource.com/setup_7.x | bash -
+      RUN apt-get install -y nodejs
+    },
+  ]
+
+  dockerfile += [
+      %{
       # Configure the main working directory. This is the base
       # directory used in any further RUN, COPY, and ENTRYPOINT
       # commands.
       RUN mkdir -p /home/app/web-app
       WORKDIR /home/app/web-app
     },
-    %{
+      %{
       # Copy the Gemfile as well as the Gemfile.lock and install 
       # the RubyGems. This is a separate step so the dependencies 
       # will be cached unless changes to one of those two files 
       # are made.
-      COPY test-app-git/Gemfile test-app-git/Gemfile.lock ./
+      COPY venteicher-org/Gemfile venteicher-org/Gemfile.lock ./
       RUN gem install bundler && bundle install --jobs 20 --retry 5
+
     },
-      "ADD test-app-git  /home/app/web-app",
+      "ADD venteicher-org  /home/app/web-app",
   ]
 
-  dockerfile += ["RUN chown -R app:app /home/app/web-app"] if(passenger)
+  dockerfile += [ "RUN chown -R app:app /home/app/web-app"] if(passenger)
+
+  dockerfile += [
+    %{
+      # Precompile Rails assets
+      RUN bundle exec rake assets:precompile
+    },
+  ]
 
   dockerfile_non_passenger = [
     %{
@@ -166,10 +201,21 @@ def docker_create_container_image(container_name, docker_context_url)
     }
   ]
 
+  # Put this at the end so we can re-use the heavy stuff created earlier
+  dockerfile += [
+    nginx,
+    # passenger_redis,
+  ]
+
   dockerfie = dockerfile.join("\n")
 
 
   make_file("#{docker_context_url}/Dockerfile", dockerfile)
+
+  ##############################
+  # Create the required files
+  passenger_prep(docker_context_url)
+
 
   # Note: Docker ignore can be put directly in app dir
 
@@ -180,13 +226,15 @@ def docker_create_container_image(container_name, docker_context_url)
   #
   exec [ 
     "docker --debug build",
-    "--tag #{container_name}",                  # Name and optionally a tag in the ‘name:tag’ format
+    "--tag #{image_uri}",                  # Rename an image (example 'whenry/fedora-jboss:v2.1')
+
     "--file #{docker_context_url}/Dockerfile",  # 1) Where to find docker file
+
     "#{docker_context_url}"                     # 2) Where to find context dir
   ].join(' ')
   puts "#{__method__.to_s} exit"
 
 
-  # docker_tag_image_into_repository(container_name, docker_registry_url)
+  #docker_tag_image_into_repository(image_uri, docker_context_url)
 
 end
