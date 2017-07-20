@@ -3,7 +3,8 @@ def passenger_prep(docker_context_url)
 
   webapp_conf = %{
     server {
-      # Identifies use of this "server" block
+      # Maps URI to this "server" block
+      #   The URI is specified in the "Host" header block in HTTP request
       server_name web-app;
 
       #listen 80;
@@ -45,13 +46,33 @@ def passenger_prep(docker_context_url)
 
   # ADD 00_app_env.conf /etc/nginx/conf.d/00_app_env.conf
 
+  #  passenger_app_env development;
+  #  passenger_app_env production;
+
   app_env_conf_00 = %{
     passenger_app_env development;
+
+    passenger_friendly_error_pages on;
   }
 
   make_file("#{docker_context_url}/00_app_env.conf", app_env_conf_00)
 
   # ADD postgres-env.conf /etc/nginx/main.d/postgres-env.conf
+
+  rails_env_conf = %{
+    # rails-env.conf
+    
+    # Environment values to pass through
+
+    # Set Nginx config environment based on
+    # the values set in the .env file
+    #env SECRET_KEY_BASE;
+    env RAILS_MASTER_KEY;
+    env RAILS_ENV;
+  }
+
+  make_file("#{docker_context_url}/rails-env.conf", rails_env_conf)
+
 
 =begin
   postgres_env_conf = <<-FOO
@@ -62,8 +83,8 @@ def passenger_prep(docker_context_url)
   make_file("#{docker_context_url}/postgres-env.conf", postgres_env_conf)
 =end
 
-  #make_file("#{docker_context_url}/"gzip_max.conf", "gzip_comp_level 9;")
+  #make_file("#{docker_context_url}/gzip_max.conf", "gzip_comp_level 9;")
 
-  #make_file("#{docker_context_url}/"secret_key.conf", "env SECRET_KEY=123456;")
+  #make_file("#{docker_context_url}/secret_key.conf", "env SECRET_KEY=123456;")
 end
 
