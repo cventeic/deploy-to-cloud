@@ -107,15 +107,6 @@ eval (minikube docker-env)
 ## Access web page
 minikube service test-app-load-balancer --url
 
-# Gcloud
-
-List clusters available to gcloud:
-  gcloud container clusters list
-
-Ensure kubectl has the right credentials:
-  gcloud auth application-default login 
-
-  This opens browser and lets you select credentials
 
 
 # Secrets
@@ -149,6 +140,27 @@ See https://kubernetes.io/docs/concepts/configuration/secret/
 
 # Google Container Setup
 
+
+## Set defaults for the gcloud command-line tool
+
+gcloud config set project PROJECT_ID
+gcloud config set project venteicher-org-174023
+
+gcloud config set compute/zone us-central1     (IOWA)
+gcloud config set compute/zone us-central1
+
+
+
+
+List clusters available to gcloud:
+  gcloud container clusters list
+
+Ensure kubectl has the right credentials:
+  gcloud auth application-default login
+
+  This opens browser and lets you select credentials
+
+
 Configure gcloud for the correct project:
   gcloud config set project venteicher-org-174023
 
@@ -173,13 +185,20 @@ Create the cluster:
     other:
       --machine-type f1-micro --num-nodes 3
 
+  Through the gui I set premptible and autoscaling 1->3
+
+  Current cluster is venteicher-org-cluster-aug17
+
+
+
+
   scopes:
   - cloud-platform: View and manage your data across Google Cloud Platform Services
   - userinfo-email: View your email address
 
 
-Download credentials and ready kubectl:
-  gcloud container clusters get-credentials venteicher-org-cluster-18  --zone us-central1-c --project venteicher-org-174023
+Download kubectl credentials and ready kubectl:
+  gcloud container clusters get-credentials venteicher-org-july19
 
     Fetching cluster endpoint and auth data.
     kubeconfig entry generated for venteicher-org-cluster.
@@ -206,7 +225,20 @@ Describe contexts:
 Select context:
   kubectl config use-context
 
+Get yaml from actual running instances:
+  kubectl get po,deployment,rc,rs,ds,no,job -o yaml?
+
+
+
+
 # Troubleshooting
+
 If your container is having trouble starting, you can use 
   kubectl exec -it [pod name] bash
 
+
+If ingress isn't able to use the ip address...
+  Go to GCE console... Network Services... Load Balancing...
+     and delete existing balancer.
+
+  A new load balancer is created when an new ingress instance is created.
