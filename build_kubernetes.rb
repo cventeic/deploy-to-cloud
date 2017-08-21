@@ -1,5 +1,17 @@
 require 'erb'
 
+# Kubernetes services...
+# Think micro-service available to all pods
+#
+# Service defines a logical set of Pods and a policy by which to access them
+#
+# The set of Pods is (usually) determined by a Label Selector.
+#
+# More info: http://kubernetes.io/docs/user-guide/services#defining-a-service
+# More info: http://kubernetes.io/docs/user-guide/services#virtual-ips-and-service-proxies
+#
+
+
 def misc_abc
   #exec("kubectl get deployments")
   #exec("kubectl get pods")
@@ -8,154 +20,191 @@ def misc_abc
   # exec("kubectl delete deployments #{deployment.name}")
 end
 
+# Todo: Make this selective
 def kubernetes_delete_old()
   exec("kubectl delete service --all")
   exec("kubectl delete deployment --all")
+  exec("kubectl delete ingress --all")
+  exec("kubectl delete hpa --all")
 end
 
-def kubernetes_establish_deployment(component, image, kubernetes_config_url)
+def kubernetes_establish_app_secrets_yml(config_directory, keys)
+  puts "#{__method__.to_s} enter"
 
-  component_name = "#{component.app}-#{component.tier}"
+  # example:   rails_master_key: #{rails_master_key}
+  #
+  keys_strings = []
+  keys.to_h.each_pair do |key_id, key_value|
+    keys_strings << "#{key_id}: #{key_value}"
+  end
 
-  deployment = %{
-    # This file configures the application frontend. 
-    # The frontend serves public web traffic.
+  puts "keys_strings: #{keys_strings}"
 
-    apiVersion: extensions/v1beta1
-    kind: Deployment
-    metadata:
-      name: #{component_name}
-      labels:
-        app: #{component.app}
-        tier: #{component.tier} 
-
-    # The replica set ensures that at least 3
-    # instances of the app are running on the cluster.
-    # For more info about Pods see:
-    #   https://cloud.google.com/container-engine/docs/pods/
-    spec:
-      replicas: #{component.replicas}
-      template:
-        metadata:
-          labels:
-            app: #{component.app}
-            tier: #{component.tier}
-        spec:
-          containers:
-          - name: #{component_name}
-
-            image: #{image}:latest
-
-            # This setting makes nodes pull the docker image every time before
-            # starting the pod. This is useful when debugging, but should be turned
-            # off in production.
-            imagePullPolicy: Always
-
-            #imagePullPolicy: IfNotPresent
-
-            # The FORMATION environment variable is used by foreman in the
-            # Dockerfile's CMD to control which processes are started. In this
-            # case, only the bookshelf process is needed.
-            # - name: FORMATION
-            #   value: web=1
-
-            env:
-            - name: RAILS_MASTER_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: app-secrets
-                  key: rails_master_key
-
-            # The process listens on port 8080 for web traffic by default.
-            # containerPort: 8080
-            # containerPort: 3000   # Rails
-            ports:
-              - name: rails-server
-                containerPort: 3000
-              - name: http-server
-                containerPort: 8080
-   }
-
-  #<%= if (component.tier == "frontend") %>
-  #<% end %>
-
-  exec("mkdir -p #{kubernetes_config_url}")
-
-  file_name = "#{kubernetes_config_url}/deployment-#{component_name}.yaml"
-
-  file_txt  = ERB.new(deployment).result()
-
-  make_file(file_name, file_txt)
-
-  exec("kubectl create -f #{file_name}")
-end
-
-def kubernetes_establish_app_secrets_yml(kubernetes_config_url, rails_master_key)
-
-  # mysql_user: cm9vdA==
-  # mysql_password: bXkgc2VjdXJlIHBhc3N3b3Jk
 
   app_secrets_yml = %{
-    apiVersion: v1
-    data:
-      rails_master_key: #{rails_master_key}
-    kind: Secret
-    type: Opaque
-    metadata:
-      name: app-secrets
-  }
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secrets
+type: Opaque
+data:
+  username: YWRtaW4=
+  password: MWYyZDFlMmU2N2Rm
+  #{keys_strings.join('\n')}
+}
 
-  exec("mkdir -p #{kubernetes_config_url}")
 
-  file_name = "#{kubernetes_config_url}/app-secrets.yml"
+  exec("rm -r -f #{config_directory}")
+  exec("mkdir -p #{config_directory}")
+
+  file_name = "#{config_directory}/app-secrets.yml"
 
   make_file(file_name, ERB.new(app_secrets_yml).result())
 
-  #exec("kubectl create -f #{file_name}")
   exec("kubectl apply -f #{file_name}")
 
-  exec("rm -f #{file_name}") # Don't keep this around
+  exec("rm -f #{file_name}") # Don't keep a file with secret keys hanging around
 
- end
-
-def kubernetes_establish_service(service, component, kubernetes_config_url)
-
-  service_name = "#{service.app}-load-balancer"
-
-  service_yml = %{
-
-    # The service provides a load-balancing proxy over the frontend pods. 
-    # By specifying the type as a 'LoadBalancer', Container Engine will create an external HTTP load balancer.
-    # For more information about Services see:
-    #   https://cloud.google.com/container-engine/docs/services/
-    # For more information about external HTTP load balancing see:
-    #   https://cloud.google.com/container-engine/docs/load-balancer
-    kind: Service
-    apiVersion: v1
-    metadata:
-      name: #{service_name}
-      labels:
-        app: #{service_name}
-        tier: #{service.tier}
-    spec:
-      type: LoadBalancer
-      selector:
-        app: #{component.app}
-        tier: #{component.tier}
-      ports:
-      - port: 80
-        targetPort: http-server
-  }
-
-  exec("mkdir -p #{kubernetes_config_url}")
-
-  file_name = "#{kubernetes_config_url}/service-#{service_name}.yaml"
-
-  make_file(file_name, ERB.new(service_yml).result())
-
-  exec("kubectl create -f #{file_name}")
-
-  # exec("kubectl describe service #{service_name}")
+  puts "#{__method__.to_s} exit"
 end
+
+
+def kubernetes_apply(config_directory: '', uber_name: 'venteicher-org', replicas: 1, docker_image_name:)
+  puts "#{__method__.to_s} enter"
+
+
+  service_port  = "k-srv-port"           # URI for port exposed by service needed by ingress
+
+  deployments_port  = "w-srvr-port"     # URI for port exposed by web server
+
+  # ingress annotations:
+  #  kubernetes.io/ingress.global-static-ip-name: venteicher-org-ip
+
+  yml = %{
+# This file configures the application frontend.
+# The frontend serves public web traffic.
+
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: deployment-#{uber_name}
+  labels:
+    app: deployment-#{uber_name}
+
+spec:
+  template:
+    metadata:
+      labels:
+        app: deployment-#{uber_name}
+    spec:
+      containers:
+      # Environment variables to set in controller
+      - env:
+        - name: RAILS_MASTER_KEY
+          valueFrom:
+            secretKeyRef:
+              key: rails_master_key
+              name: app-secrets
+
+        # Docker image name
+        image: #{docker_image_name}
+
+        # Image pull policy.
+        # One of Always, Never, IfNotPresent. Defaults to Always if :latest tag is specified, or IfNotPresent otherwise.
+        # This setting makes nodes pull the docker image every time before starting the pod.
+        # This is useful when debugging, but should be turned off in production.
+        #imagePullPolicy: IfNotPresent
+
+        imagePullPolicy: Always
+
+        # Name of the container specified as a DNS_LABEL.
+        # Each container in a pod must have a unique name
+        name: #{uber_name}
+
+        # List of ports exposed from the container
+        ports:
+        # Name for the port that can be referred to by services.
+        - name: #{deployments_port}
+          # Port exposed from container
+          containerPort: 8080
+
+---
+
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: service-#{uber_name}
+
+spec:
+  # NodePort: Exposes the service on each Node’s IP at a static port (the NodePort).
+  type: NodePort
+
+  # Deliver service using pods matching this label
+  selector:
+    app: deployment-#{uber_name}
+
+  ports:
+  - name: #{service_port}
+    port: 8080
+
+    # Number or name of the port to access on the pods targeted by the service.
+    # A string will be looked up as a named port in the target Pod's container ports.
+    targetPort: #{deployments_port}
+
+---
+
+
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: ingress-#{uber_name}
+  annotations:
+    kubernetes.io/ingress.global-static-ip-name: venteicher-org-ip
+
+spec:
+  backend:
+    serviceName: service-#{uber_name}
+    servicePort: #{service_port}
+
+---
+
+# Autoscaler
+# Creates new pods on nodes in response to demand
+# GCE creates new nodes as needed
+
+
+apiVersion: autoscaling/v1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: hpa-venteicher-org
+spec:
+  maxReplicas: 10
+  minReplicas: 1
+  scaleTargetRef:
+    apiVersion: extensions/v1beta1
+    kind: Deployment
+    name: deployment-venteicher-org
+  targetCPUUtilizationPercentage: 50
+
+}
+
+  exec("mkdir -p #{config_directory}")
+
+  file_name = "#{config_directory}/#{uber_name}.yaml"
+
+  make_file(file_name, ERB.new(yml).result())
+
+  exec("kubectl apply -f #{file_name}")
+
+  puts "#{__method__.to_s} exit"
+end
+
+
+
+
+
+
+
 
 
