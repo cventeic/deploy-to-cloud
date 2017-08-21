@@ -162,17 +162,3 @@ meta_config.apps.each do |app_config|
   )
 end
 
-
-# Issues:
-# - Make sure successfully deplopys contain expected / new contents
-#   by adding random id on newly constructed images
-# - Inconsistent use of hiding / exposing details within project, cloud, apps
-# - Partitioning into containerize and deploy
-# - Production, Test, Development specified in config
-# - Remote registry uri specified in config
-# - Cloud provider setup (meta to kubernetes) automated or at least described
-# - Deployment to cloud should likely be independent of containerizing apps
-# - Deployment to cloud should likely occur once not per app
-# - Only add key refrences to kubernetes deployment when actual key is specified in config
-# - Remove the app-secretes.yml file from kubernetes-config directory after apply
-
