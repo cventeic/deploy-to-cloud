@@ -3,97 +3,176 @@ require './build_util'
 require './build_docker'
 require './build_kubernetes'
 require 'ostruct'
+require 'recursive_open_struct'
 
-project = OpenStruct.new
-project.id   = 0
-project.name = 'venteicher-org'
-project.tag  = 'venteicher-org'
-# project.gcs_bucket_name = ''
-# project.access_key = ''
-# project.secret = ''
+# def containerize( project_name: '', project_id: 0, compute_engine: '', app_types: [], app_source_directories: [])
+def containerize(
+    project_name: '',
+    project_id: 0,
+    app: {}
+  )
 
-# 1. Create Container Engine Cluster
-#gce_create_cluster(project)
+  puts "#{__method__.to_s} enter"
 
-# 2. Creating a Cloud Storage bucket
-#gcs_create_bucket(project.gcs_bucket_name)
+  # Where to push the docker image
+  #docker_remote_registry_uri = ""
+  #docker_remote_registry_uri = "localhost:5000" if server.compute_engine == 'minikube'
+  #docker_remote_registry_uri = "gcr.io/#{project_name}-#{project_id}" if server.compute_engine == 'gce'
 
-# 3. Containerize a Ruby application.
+
+  app_name       = "#{project_name}-#{project_id}"
+  image_name     = "#{project_name}-#{project_id}"
+
+
+  docker_context_directory = docker_ready_context_directory(
+    app_name: app_name,
+    app_source_directory: app.source_url
+  )
+
+  passenger_prep(container_context_directory: docker_context_directory, app_types: app.type)
+
+  dockerfile_contents = docker_ready_dockerfile(app_directory: app_name, app_types: app.type)
+
+  make_file("#{docker_context_directory}/Dockerfile", dockerfile_contents)
+
+
+
+  docker_create_container_image(image_name: image_name, context_directory: docker_context_directory)
+
+  container_info = { image_name: image_name }
+
+  puts "#{__method__.to_s} exit"
+
+  # Convert data structure (hashes and arrays) into a
+  #   dot notation accessable structure (ex. config.project.name)
+  #
+  return RecursiveOpenStruct.new(container_info, recurse_over_arrays: true )
+
+end
+
+def push_container_image_to_cloud( local_image_name:'', cloud_config: {})
+  puts "#{__method__.to_s} enter"
+
+  puts "cloud_config: #{cloud_config}"
+
+  docker_remote_image_uri = "#{cloud_config.registry_uri}/#{local_image_name}"
+
+  docker_tag_image_into_repository(local_image_name, cloud_config.registry_uri)
+
+
+  if cloud_config.provider == 'gce'
+
+    # Google Container Engine
+    gce_push_container_image(docker_remote_image_uri)
+
+  else
+
+    # Prior to this push, Start local docker registry hosted by docker:
+    #   docker run -d -p 5000:5000 --name registry registry:2
+    #   docker start registry
+
+    exec "docker push #{docker_remote_image_uri}"
+  end
+
+  puts "#{__method__.to_s} exit"
+
+  cloud_info = { remote_registry_image_uri: docker_remote_image_uri }
+
+  # Convert data structure (hashes and arrays) into a
+  #   dot notation accessable structure (ex. config.project.name)
+  #
+  return RecursiveOpenStruct.new(cloud_info, recurse_over_arrays: true )
+
+end
+
+def kubernetes( uber_name: '', keys: {}, remote_image_uri: '')
+  puts "#{__method__.to_s} enter"
+
+  kubernetes_delete_old()
+
+  # Directory where the intermediate kubernetes config file are stored
+  kubernetes_config_directory = "kubernetes_config"
+
+  kubernetes_establish_app_secrets_yml(kubernetes_config_directory, keys)
+
+  kubernetes_apply(
+    config_directory: kubernetes_config_directory,
+    uber_name: uber_name,
+    docker_image_name: remote_image_uri
+  )
+
+  puts "#{__method__.to_s} exit"
+end
+
+
+
+require './config'
+
+meta_config = get_config()
+
+# 1. Prep Cloud Provider
 #
-#   a. Cloning/Create the sample application
+# 1.a Create Container Engine Cluster
+#     gce_create_cluster(project)
 #
-#   b. Configuring the application
-#rails_configure_db(project.id)
-#rails_configure_settings(project)
-
-#   c. Containerizing the application
-#image_tag =  "gcr.io/#{project.id}/#{project.name}:#{project.tag}"
-#registry  =  "gcr.io/#{project.id}/#{project.name}:#{project.tag}"
+# 1.b Creating a Cloud Storage bucket
+#     gcs_create_bucket(project.gcs_bucket_name)
 #
-#image_uri =  "gcr.io/#{project.id}/#{project.name}:latest"
-#image_uri = "#{external_registry_endpoint}#{project.name}"
-#image_uri = "gcr.io/#{project.id}/#{project.name}:#{project.image_uri}"
-
-# docker run -d -p 5000:5000 --name registry registry:2
-
-#exec 'rails new venteicher-org-git --force'
-
-image_uri = "venteicher-org"
-image_uri = "gcr.io/venteicher-org-174023/venteicher-org"
-docker_context_url = "docker_context"
-
-docker_create_container_image(image_uri, docker_context_url)
-
-gce_push_container_image(image_uri)
-
-# Start local docker registry
-# docker run -d -p 5000:5000 --name registry registry:2
-
-#external_registry_endpoint = "localhost:5000/"
-#exec "docker push #{external_registry_endpoint}#{project.name}"
-
-kubernetes_delete_old()
-
-
-kubernetes_config_url = "kubernetes_config"
-
-puts "input rails_master_key:"
-rails_master_key = gets.chomp
-
-puts "your key is #{rails_master_key}"
-
-
-kubernetes_establish_app_secrets_yml(kubernetes_config_url, rails_master_key)
-
-
-# Deploy the replicated back end for the application.
+# 2. Containerize Web Apps (Create Docker Image Locally)
 #
-#component = OpenStruct.new
-#component.app = "venteicher-org"
-#component.tier  = "worker"
-#component.replicas = 2
-#kubernetes_establish_deployment(component, image_uri)
-
-
-# Deploy the replicated front end for the application.
+# 3. Deploy to cloud
 #
-component = OpenStruct.new
-component.app = "venteicher-org"
-component.tier  = "frontend"
-component.replicas = 3
-
-kubernetes_establish_deployment(component, image_uri, kubernetes_config_url)
-
-# Deploy the load-balanced service to route HTTP traffic to the front end.
+# 3.a Push images to cloud provider (or local)
+# 3.b Deploy apps on cloud compute via kubernetes
 #
-service = OpenStruct.new
-service.app = "venteicher-org"
-service.tier  = "frontend"
-kubernetes_establish_service(service, component, kubernetes_config_url)
 
-# To see app on minikube do this
-# minikube service venteicher-org-load-balancer
+def  deploy_to_cloud(project_config: {}, cloud_config: {}, local_image_name: '')
+  puts "#{__method__.to_s} enter"
+
+  cloud_info = push_container_image_to_cloud(
+                cloud_config: cloud_config,
+                local_image_name: local_image_name,
+              )
 
 
+  kubernetes(
+    uber_name: project_config.name,
+    keys:      project_config.keys,
+    remote_image_uri: cloud_info.remote_registry_image_uri
+  )
 
+  puts "#{__method__.to_s} exit"
+end
+
+meta_config.apps.each do |app_config|
+
+  puts "meta_config: #{meta_config}"
+
+  container_info = containerize(
+                      project_name: meta_config.project.name,
+                      project_id: meta_config.project.id,
+                      app: app_config
+                    )
+
+
+  deploy_to_cloud(
+    project_config: meta_config.project,
+    local_image_name: container_info.image_name,
+    cloud_config: meta_config.cloud
+  )
+end
+
+
+# Issues:
+# - Make sure successfully deplopys contain expected / new contents
+#   by adding random id on newly constructed images
+# - Inconsistent use of hiding / exposing details within project, cloud, apps
+# - Partitioning into containerize and deploy
+# - Production, Test, Development specified in config
+# - Remote registry uri specified in config
+# - Cloud provider setup (meta to kubernetes) automated or at least described
+# - Deployment to cloud should likely be independent of containerizing apps
+# - Deployment to cloud should likely occur once not per app
+# - Only add key refrences to kubernetes deployment when actual key is specified in config
+# - Remove the app-secretes.yml file from kubernetes-config directory after apply
 
