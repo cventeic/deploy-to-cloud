@@ -1,7 +1,7 @@
 # Rails
 
 ## Secrets
-build.rb automatially sets this up.
+deploy.rb automatially sets this up.
 
 Prep Secrets:
 
