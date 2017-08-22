@@ -4,7 +4,6 @@ require 'recursive_open_struct'
 
 def get_config()
 
-
   config = {
     project: {
       name: 'venteicher-org',
@@ -22,6 +21,11 @@ def get_config()
 
 
 =begin
+    # Prior to deploy, Start local docker registry:
+    #
+    #   docker run -d -p 5000:5000 --name registry registry:2
+    #   docker start registry
+    #
     cloud: {
       provider:  'local', # Local Kubernetes Cluster
       registry_uri: "localhost:5000"

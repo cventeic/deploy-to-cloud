@@ -1,7 +1,7 @@
-require './build_gce'
 require './build_util'
 require './build_docker'
 require './build_kubernetes'
+
 require 'ostruct'
 require 'recursive_open_struct'
 
@@ -62,15 +62,14 @@ def push_container_image_to_cloud( local_image_name:'', cloud_config: {})
 
   if cloud_config.provider == 'gce'
 
-    # Google Container Engine
-    gce_push_container_image(docker_remote_image_uri)
+    # Push to docker repo provided by Google Container Engine
+    exec "gcloud docker -- push #{docker_remote_image_uri}:latest"
 
   else
 
     # Prior to this push, Start local docker registry hosted by docker:
     #   docker run -d -p 5000:5000 --name registry registry:2
     #   docker start registry
-
     exec "docker push #{docker_remote_image_uri}"
   end
 

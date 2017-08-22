@@ -12,20 +12,21 @@ YML
 # Reserve static IP address from google cloud
 'gcloud compute addresses create app-external — region=us-central1'
 
+# Create disk
 'gcloud compute disks create --size 300GB --type pd-ssd db-data'
 
+# container image format in google docker repository
 'docker tag app us.gcr.io/$PROJECT_ID/$CONTAINER_NAME:$TAG'
 
+# Installing kubectl
 'gcloud components install kubectl'
 
 =end
 
 
-#####################################
-#
-
 #########
 # 1. Create Container Engine Cluster
+#
 def gce_create_cluster(project)
 
   create_gce_cluster = <<-YML
@@ -45,6 +46,7 @@ end
 
 #########
 # 2. Creating a Cloud Storage Bucket
+#
 def gcs_create_bucket(bucket_name)
 
   # Create a bucket
@@ -61,12 +63,4 @@ def gcs_create_bucket(bucket_name)
   # 4. Note the Access Key and Secret because they will be used in the application configuration.
 
 end
-
-#####################################
-
-def gce_push_container_image(image_tag)
-  exec "gcloud docker -- push #{image_tag}:latest"
-end
-
-#####################################
 
