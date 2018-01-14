@@ -113,9 +113,9 @@ spec:
         # One of Always, Never, IfNotPresent. Defaults to Always if :latest tag is specified, or IfNotPresent otherwise.
         # This setting makes nodes pull the docker image every time before starting the pod.
         # This is useful when debugging, but should be turned off in production.
-        #imagePullPolicy: IfNotPresent
+        imagePullPolicy: IfNotPresent
 
-        imagePullPolicy: Always
+        #imagePullPolicy: Always
 
         # Name of the container specified as a DNS_LABEL.
         # Each container in a pod must have a unique name

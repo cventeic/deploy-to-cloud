@@ -1,6 +1,14 @@
 # deploy-to-cloud
 Automate task of deploying web-apps (rails, node) to kubernetes on cloud service
 
+# Required Packages
+  Docker via https://docs.docker.com/engine/installation/linux/docker-ce/ubuntu/#set-up-the-repository
+
+  Kubernetes via
+    sudo snap install kubectl --classic
+
+  gcloud init
+
 # Deployment Process
 
 0. Prepare web app(s) in local directory.
